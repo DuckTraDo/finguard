@@ -1,0 +1,26 @@
+{
+  "dataset_name": "fixture_smoke",
+  "baseline_tag": "finguard-classifier-verify-v2-green",
+  "total_cases": 6,
+  "schema_valid_count": 6,
+  "schema_valid_rate": 1.0,
+  "completed_rate": 1.0,
+  "partial_rate": 0.0,
+  "query_type_accuracy": 1.0,
+  "expected_behavior_accuracy": 1.0,
+  "temporal_accuracy": 1.0,
+  "refusal_accuracy": 1.0,
+  "baseline_alignment_rate": 1.0,
+  "verification_downgraded_rate": 0.1667,
+  "query_type_counts": {
+    "compliance_sensitive": 2,
+    "factual": 2,
+    "injection": 1,
+    "operational": 1
+  },
+  "verification_status_counts": {
+    "not_applicable": 3,
+    "unverified": 1,
+    "verified": 2
+  }
+}
