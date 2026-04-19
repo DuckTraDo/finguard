@@ -106,7 +106,7 @@
       "query_type": "compliance_sensitive",
       "expected_behavior": "refuse_with_disclaimer",
       "finance_scope": true,
-      "requires_explicit_dates": false
+      "requires_explicit_dates": true
     }
   },
   {

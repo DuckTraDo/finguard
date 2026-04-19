@@ -13,13 +13,17 @@ EXPECTED_FINGUARD_KEYS = {
     "query_type",
     "expected_behavior",
     "finance_scope",
+    "temporal_intent",
     "time_context",
     "refusal_reason",
+    "classification_reasons",
     "query_augmented",
     "source_count",
     "unverified_numbers",
     "numeric_claim_count",
     "verified_number_count",
+    "verification_status",
+    "verification_downgraded",
     "hallucination_risk_score",
     "citations",
     "guard_status",
@@ -102,9 +106,14 @@ def test_blocked_result_contract_is_stable(agent):
     assert result["finguard"]["query_type"] == "compliance_sensitive"
     assert result["finguard"]["expected_behavior"] == "refuse_with_disclaimer"
     assert result["finguard"]["query_augmented"] is False
+    assert result["finguard"]["temporal_intent"]["detected"] is True
+    assert "relative_time" in result["finguard"]["temporal_intent"]["signals"]
+    assert "pattern.direct_advice" in result["finguard"]["classification_reasons"]
     assert result["finguard"]["guard_status"] == "ok"
     assert result["finguard"]["verify_status"] == "skipped"
     assert result["finguard"]["source_count"] == 0
+    assert result["finguard"]["verification_status"] == "not_applicable"
+    assert result["finguard"]["verification_downgraded"] is False
     assert result["finguard"]["guard_latency_ms"] is not None
     assert result["finguard"]["verify_latency_ms"] is None
 
@@ -127,6 +136,7 @@ def test_augmented_query_does_not_pollute_returned_messages(agent):
     assert set(result["finguard"].keys()) == EXPECTED_FINGUARD_KEYS
     assert user_messages[0]["content"] == "Explain the risks of buying AAPL today."
     assert result["finguard"]["query_augmented"] is True
+    assert result["finguard"]["temporal_intent"]["detected"] is True
     assert result["finguard"]["guard_status"] == "ok"
     assert result["finguard"]["verify_status"] == "ok"
     assert isinstance(result["sources"], list)
@@ -152,6 +162,8 @@ def test_sources_is_always_list_when_no_tools_used(agent):
     assert result["finguard"]["verify_status"] == "ok"
     assert result["finguard"]["numeric_claim_count"] == 2
     assert result["finguard"]["verified_number_count"] == 0
+    assert result["finguard"]["verification_status"] == "unverified"
+    assert result["finguard"]["verification_downgraded"] is True
     assert result["finguard"]["unverified_numbers"] == ["100", "2023"]
 
 

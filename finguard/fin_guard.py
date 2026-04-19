@@ -6,7 +6,9 @@ from typing import Optional
 
 from finguard.config import FinGuardConfig
 from finguard.fin_classifier import ExpectedBehavior, FinClassifier, QueryType
-from finguard.fin_utils import build_augmented_query, extract_time_context
+from finguard.fin_utils import TemporalIntent, build_augmented_query, build_temporal_intent, extract_time_context
+
+REASON_INJECTION_PATTERN = "pattern.injection"
 
 
 @dataclass
@@ -15,9 +17,11 @@ class GuardResult:
     query_type: QueryType
     expected_behavior: ExpectedBehavior
     finance_scope: bool
+    temporal_intent: TemporalIntent
     time_context: Optional[dict]
     refusal_reason: Optional[str]
     augmented_query: str
+    classification_reasons: list[str]
 
 
 class FinGuardLayer:
@@ -34,19 +38,23 @@ class FinGuardLayer:
         self.classifier = FinClassifier(config)
 
     def process(self, query: str) -> GuardResult:
+        time_context = extract_time_context(query)
+        temporal_intent = build_temporal_intent(time_context)
+
         if self._detect_injection(query):
             return GuardResult(
                 passed=False,
                 query_type="injection",
                 expected_behavior="refuse_with_disclaimer",
                 finance_scope=self.classifier.is_finance_related(query),
-                time_context=None,
+                temporal_intent=temporal_intent,
+                time_context=time_context,
                 refusal_reason="I can't comply with instructions that attempt to override system or safety rules",
                 augmented_query=query,
+                classification_reasons=[REASON_INJECTION_PATTERN],
             )
 
         classification = self.classifier.classify(query)
-        time_context = extract_time_context(query)
 
         if classification.query_type == "operational":
             return GuardResult(
@@ -54,9 +62,11 @@ class FinGuardLayer:
                 query_type=classification.query_type,
                 expected_behavior=classification.expected_behavior,
                 finance_scope=classification.finance_scope,
+                temporal_intent=classification.temporal_intent,
                 time_context=time_context,
                 refusal_reason="I can't execute trades, transfers, or other financial operations",
                 augmented_query=query,
+                classification_reasons=classification.reasons,
             )
 
         if classification.query_type == "out_of_scope":
@@ -65,9 +75,11 @@ class FinGuardLayer:
                 query_type=classification.query_type,
                 expected_behavior=classification.expected_behavior,
                 finance_scope=classification.finance_scope,
+                temporal_intent=classification.temporal_intent,
                 time_context=time_context,
                 refusal_reason="I can only help with finance-related analysis in this mode",
                 augmented_query=query,
+                classification_reasons=classification.reasons,
             )
 
         if classification.expected_behavior == "refuse_with_disclaimer":
@@ -76,9 +88,11 @@ class FinGuardLayer:
                 query_type=classification.query_type,
                 expected_behavior=classification.expected_behavior,
                 finance_scope=classification.finance_scope,
+                temporal_intent=classification.temporal_intent,
                 time_context=time_context,
                 refusal_reason="I can't provide a personalized financial recommendation",
                 augmented_query=query,
+                classification_reasons=classification.reasons,
             )
 
         augmented_query = query
@@ -96,9 +110,11 @@ class FinGuardLayer:
             query_type=classification.query_type,
             expected_behavior=classification.expected_behavior,
             finance_scope=classification.finance_scope,
+            temporal_intent=classification.temporal_intent,
             time_context=time_context,
             refusal_reason=None,
             augmented_query=augmented_query,
+            classification_reasons=classification.reasons,
         )
 
     def _detect_injection(self, query: str) -> bool:

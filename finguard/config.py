@@ -32,10 +32,12 @@ class FinGuardConfig:
     enable_skills: bool = True
     strict_financial_scope: bool = False
     augment_queries: bool = True
+    enable_llm_classifier_refiner: bool = False
 
     # Thresholds
     hallucination_risk_threshold: float = 0.3
     injection_detection_threshold: float = 0.8
+    classifier_refiner_confidence_floor: float = 0.8
 
     # Endpoints
     base_model_url: str = "http://localhost:18080"

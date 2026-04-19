@@ -8695,13 +8695,24 @@ class AIAgent:
             "query_type": None,
             "expected_behavior": None,
             "finance_scope": False,
+            "temporal_intent": {
+                "detected": False,
+                "signals": [],
+                "requires_explicit_dates": False,
+                "relative_terms": [],
+                "years": [],
+                "quarters": [],
+            },
             "time_context": None,
             "refusal_reason": None,
+            "classification_reasons": [],
             "query_augmented": False,
             "source_count": len(source_list),
             "unverified_numbers": unverified_numbers,
             "numeric_claim_count": numeric_claim_count,
             "verified_number_count": max(numeric_claim_count - len(unverified_numbers), 0),
+            "verification_status": str(getattr(verify_result, "verification_status", "not_applicable") or "not_applicable"),
+            "verification_downgraded": bool(getattr(verify_result, "downgraded_for_verification", False)),
             "hallucination_risk_score": float(
                 getattr(verify_result, "hallucination_risk_score", 0.0) or 0.0
             ),
@@ -8722,8 +8733,24 @@ class AIAgent:
                 "query_type": guard_result.query_type,
                 "expected_behavior": guard_result.expected_behavior,
                 "finance_scope": guard_result.finance_scope,
+                "temporal_intent": dict(
+                    getattr(
+                        guard_result,
+                        "temporal_intent",
+                        {
+                            "detected": False,
+                            "signals": [],
+                            "requires_explicit_dates": False,
+                            "relative_terms": [],
+                            "years": [],
+                            "quarters": [],
+                        },
+                    )
+                    or {}
+                ),
                 "time_context": guard_result.time_context,
                 "refusal_reason": guard_result.refusal_reason,
+                "classification_reasons": list(getattr(guard_result, "classification_reasons", []) or []),
                 "query_augmented": bool(
                     original_user_message is not None
                     and guard_result.augmented_query != original_user_message

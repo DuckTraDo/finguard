@@ -1,5 +1,7 @@
+import pytest
+
 from finguard.config import FinGuardConfig
-from finguard.fin_utils import normalize_sources
+from finguard.fin_utils import normalize_sources, supporting_sources_for_number
 from finguard.fin_verify import FinVerifyLayer
 
 
@@ -52,6 +54,8 @@ def test_verify_adds_disclaimer_and_sources():
     assert "Sources:" in result.final_response
     assert result.unverified_numbers == []
     assert result.numeric_claim_count == 2
+    assert result.verification_status == "verified"
+    assert result.downgraded_for_verification is False
 
 
 def test_normalize_sources_parses_json_string_payload():
@@ -154,6 +158,11 @@ def test_verify_marks_numeric_claims_unverified_when_no_sources_exist():
 
     assert result.numeric_claim_count == 2
     assert result.unverified_numbers == ["100", "2023"]
+    assert result.verification_status == "unverified"
+    assert result.downgraded_for_verification is True
+    assert result.final_response.startswith(
+        "I could not verify the specific figures below because no captured sources were available."
+    )
     assert "Verification note: no captured sources were available" in result.final_response
 
 
@@ -247,3 +256,30 @@ def test_normalize_sources_truncates_long_content():
 
     assert len(sources) == 1
     assert sources[0]["content"] == "A" * 12
+
+
+@pytest.mark.parametrize(
+    ("token", "source_content", "expected"),
+    [
+        ("100", "Revenue was 1000.", False),
+        ("1.0", "Revenue was 10.", False),
+        ("12", "Operating margin was 12.5.", False),
+        ("12%", "Growth was 120%.", False),
+        ("1,200", "Revenue was 1200.", True),
+        ("$1,200.00", "Revenue was 1200.", True),
+        ("2024", "Fiscal year 2024 revenue increased.", True),
+        ("0.25", "Net margin was 0.250.", True),
+        ("0.25", "Net margin was 2.5.", False),
+    ],
+)
+def test_supporting_sources_for_number_handles_numeric_boundaries(token, source_content, expected):
+    sources = [
+        {
+            "source_id": "src_1",
+            "title": "filing",
+            "content": source_content,
+            "url": "https://example.com/source",
+        }
+    ]
+
+    assert bool(supporting_sources_for_number(token, sources)) is expected
