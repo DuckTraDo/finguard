@@ -160,6 +160,26 @@ uv pip install -e ".[all,dev]"
 python -m pytest tests/ -q
 ```
 
+For the focused FinGuard wrapper loop on Windows / PowerShell:
+
+```powershell
+uv venv venv --python 3.11
+.\venv\Scripts\Activate.ps1
+uv pip install -e ".[dev]"
+python -m pytest tests/finguard -q -n 0
+```
+
+These `tests/finguard` cases mock model and tool calls, so they should stay hermetic and avoid outbound network access.
+
+Useful focused slices:
+
+```powershell
+python -m pytest tests/finguard/test_dev_regression_matrix.py -q -n 0
+python -m pytest tests/finguard/test_snapshots.py -q -n 0
+```
+
+The FinGuard behavior contract is documented in [docs/finguard-behavior-matrix.md](docs/finguard-behavior-matrix.md).
+
 > **RL Training (optional):** To work on the RL/Tinker-Atropos integration:
 > ```bash
 > git submodule update --init tinker-atropos

@@ -107,6 +107,10 @@ from agent.trajectory import (
     save_trajectory as _save_trajectory_to_file,
 )
 from utils import atomic_json_write, env_var_enabled
+from finguard.config import FinGuardConfig
+from finguard.fin_guard import FinGuardLayer
+from finguard.fin_verify import FinVerifyLayer
+from finguard.fin_utils import build_refusal_response, normalize_sources
 
 
 
@@ -1212,6 +1216,16 @@ class AIAgent:
             timestamp_str = self.session_start.strftime("%Y%m%d_%H%M%S")
             short_uuid = uuid.uuid4().hex[:6]
             self.session_id = f"{timestamp_str}_{short_uuid}"
+
+        self._finguard_config = None
+        self._finguard_guard = None
+        self._finguard_verify = None
+        try:
+            self._finguard_config = FinGuardConfig.load()
+            self._finguard_guard = FinGuardLayer(self._finguard_config)
+            self._finguard_verify = FinVerifyLayer(self._finguard_config)
+        except Exception as exc:
+            logger.warning("FinGuard init failed; continuing without wrappers: %s", exc)
         
         # Session logs go into ~/.hermes/sessions/ alongside gateway sessions
         hermes_home = get_hermes_home()
@@ -8641,6 +8655,146 @@ class AIAgent:
 
         return final_response
 
+    @staticmethod
+    def _replace_last_final_assistant_message(messages: List[Dict[str, Any]], final_response: str) -> None:
+        """Update the terminal assistant message after post-processing."""
+        for msg in reversed(messages):
+            if msg.get("role") == "assistant" and not msg.get("tool_calls"):
+                msg["content"] = final_response
+                return
+        messages.append({"role": "assistant", "content": final_response})
+
+    def _finguard_payload(
+        self,
+        guard_result,
+        verify_result=None,
+        original_user_message: str | None = None,
+        sources: List[Dict[str, Any]] | None = None,
+        guard_status: str = "skipped",
+        guard_error: str | None = None,
+        guard_latency_ms: float | None = None,
+        verify_status: str = "skipped",
+        verify_error: str | None = None,
+        verify_latency_ms: float | None = None,
+    ) -> dict[str, Any]:
+        guard_enabled = bool(
+            self._finguard_guard and getattr(self._finguard_config, "enable_guard", False)
+        )
+        verify_enabled = bool(
+            self._finguard_verify and getattr(self._finguard_config, "enable_verify", False)
+        )
+        source_list = list(sources or [])
+        unverified_numbers = list(getattr(verify_result, "unverified_numbers", []) or [])
+        numeric_claim_count = int(getattr(verify_result, "numeric_claim_count", 0) or 0)
+
+        payload = {
+            "enabled": bool(guard_enabled or verify_enabled),
+            "guard_enabled": guard_enabled,
+            "verify_enabled": verify_enabled,
+            "passed": None,
+            "query_type": None,
+            "expected_behavior": None,
+            "finance_scope": False,
+            "time_context": None,
+            "refusal_reason": None,
+            "query_augmented": False,
+            "source_count": len(source_list),
+            "unverified_numbers": unverified_numbers,
+            "numeric_claim_count": numeric_claim_count,
+            "verified_number_count": max(numeric_claim_count - len(unverified_numbers), 0),
+            "hallucination_risk_score": float(
+                getattr(verify_result, "hallucination_risk_score", 0.0) or 0.0
+            ),
+            "citations": list(getattr(verify_result, "citations", []) or []),
+            "guard_status": guard_status,
+            "guard_error": guard_error,
+            "guard_latency_ms": round(float(guard_latency_ms), 3) if guard_latency_ms is not None else None,
+            "verify_status": verify_status,
+            "verify_error": verify_error,
+            "verify_latency_ms": round(float(verify_latency_ms), 3) if verify_latency_ms is not None else None,
+        }
+        if guard_result is None:
+            return payload
+
+        payload.update(
+            {
+                "passed": bool(guard_result.passed),
+                "query_type": guard_result.query_type,
+                "expected_behavior": guard_result.expected_behavior,
+                "finance_scope": guard_result.finance_scope,
+                "time_context": guard_result.time_context,
+                "refusal_reason": guard_result.refusal_reason,
+                "query_augmented": bool(
+                    original_user_message is not None
+                    and guard_result.augmented_query != original_user_message
+                ),
+            }
+        )
+        return payload
+
+    def _return_finguard_blocked_turn(
+        self,
+        messages: List[Dict[str, Any]],
+        conversation_history: List[Dict[str, Any]] | None,
+        effective_task_id: str,
+        original_user_message: str,
+        guard_result,
+        guard_status: str = "ok",
+        guard_error: str | None = None,
+        guard_latency_ms: float | None = None,
+    ) -> Dict[str, Any]:
+        """Return a blocked response without entering the LLM loop."""
+        disclaimer = ""
+        if self._finguard_config is not None:
+            disclaimer = self._finguard_config.compliance_disclaimer
+        final_response = build_refusal_response(
+            guard_result.refusal_reason or "I can't help with that request",
+            disclaimer,
+        )
+        messages.append({"role": "assistant", "content": final_response})
+        self._apply_persist_user_message_override(messages)
+
+        completed = True
+        self._save_trajectory(messages, original_user_message, completed)
+        self._cleanup_task_resources(effective_task_id)
+        self._persist_session(messages, conversation_history)
+
+        return {
+            "final_response": final_response,
+            "last_reasoning": None,
+            "messages": messages,
+            "api_calls": 0,
+            "completed": completed,
+            "partial": False,
+            "interrupted": False,
+            "response_previewed": False,
+            "model": self.model,
+            "provider": self.provider,
+            "base_url": self.base_url,
+            "input_tokens": getattr(self, "session_input_tokens", 0),
+            "output_tokens": getattr(self, "session_output_tokens", 0),
+            "cache_read_tokens": getattr(self, "session_cache_read_tokens", 0),
+            "cache_write_tokens": getattr(self, "session_cache_write_tokens", 0),
+            "reasoning_tokens": getattr(self, "session_reasoning_tokens", 0),
+            "prompt_tokens": getattr(self, "session_prompt_tokens", 0),
+            "completion_tokens": getattr(self, "session_completion_tokens", 0),
+            "total_tokens": getattr(self, "session_total_tokens", 0),
+            "last_prompt_tokens": getattr(getattr(self, "context_compressor", None), "last_prompt_tokens", 0) or 0,
+            "estimated_cost_usd": getattr(self, "session_estimated_cost_usd", 0.0),
+            "cost_status": getattr(self, "session_cost_status", "none"),
+            "cost_source": getattr(self, "session_cost_source", "none"),
+            "sources": [],
+            "finguard": self._finguard_payload(
+                guard_result,
+                original_user_message=original_user_message,
+                sources=[],
+                guard_status=guard_status,
+                guard_error=guard_error,
+                guard_latency_ms=guard_latency_ms,
+                verify_status="skipped",
+            ),
+        }
+
     def run_conversation(
         self,
         user_message: str,
@@ -8775,6 +8929,34 @@ class AIAgent:
 
         # Preserve the original user message (no nudge injection).
         original_user_message = persist_user_message if persist_user_message is not None else user_message
+        finguard_guard_result = None
+        finguard_verify_result = None
+        normalized_sources = []
+        finguard_guard_status = "skipped"
+        finguard_guard_error = None
+        finguard_guard_latency_ms = None
+        finguard_verify_status = "skipped"
+        finguard_verify_error = None
+        finguard_verify_latency_ms = None
+
+        if self._finguard_guard and getattr(self._finguard_config, "enable_guard", False):
+            guard_started_at = time.perf_counter()
+            try:
+                finguard_guard_result = self._finguard_guard.process(original_user_message)
+                finguard_guard_status = "ok"
+                if (
+                    finguard_guard_result.passed
+                    and finguard_guard_result.augmented_query != user_message
+                ):
+                    user_message = finguard_guard_result.augmented_query
+                    self._persist_user_message_override = original_user_message
+            except Exception as exc:
+                logger.warning("FinGuard input guard failed; continuing without guard: %s", exc)
+                finguard_guard_result = None
+                finguard_guard_status = "failed"
+                finguard_guard_error = str(exc)
+            finally:
+                finguard_guard_latency_ms = (time.perf_counter() - guard_started_at) * 1000.0
 
         # Track memory nudge trigger (turn-based, checked here).
         # Skill trigger is checked AFTER the agent loop completes, based on
@@ -8793,6 +8975,18 @@ class AIAgent:
         messages.append(user_msg)
         current_turn_user_idx = len(messages) - 1
         self._persist_user_message_idx = current_turn_user_idx
+
+        if finguard_guard_result is not None and not finguard_guard_result.passed:
+                return self._return_finguard_blocked_turn(
+                    messages=messages,
+                    conversation_history=conversation_history,
+                    effective_task_id=effective_task_id,
+                    original_user_message=original_user_message,
+                    guard_result=finguard_guard_result,
+                    guard_status=finguard_guard_status,
+                    guard_error=finguard_guard_error,
+                    guard_latency_ms=finguard_guard_latency_ms,
+                )
         
         if not self.quiet_mode:
             self._safe_print(f"💬 Starting conversation: '{user_message[:60]}{'...' if len(user_message) > 60 else ''}'")
@@ -11652,12 +11846,48 @@ class AIAgent:
                     "— requesting summary..."
                 )
             final_response = self._handle_max_iterations(messages, api_call_count)
-        
+
+        if (
+            final_response is not None
+            and not interrupted
+            and self._finguard_verify
+            and getattr(self._finguard_config, "enable_verify", False)
+        ):
+            if finguard_guard_result is not None:
+                finance_scope = bool(finguard_guard_result.finance_scope)
+                if finance_scope or finguard_guard_result.query_type == "compliance_sensitive":
+                    verify_started_at = time.perf_counter()
+                    try:
+                        normalized_sources = normalize_sources(messages=messages)
+                        finguard_verify_result = self._finguard_verify.process(
+                            response=final_response,
+                            sources=normalized_sources,
+                            query_type=finguard_guard_result.query_type,
+                            expected_behavior=finguard_guard_result.expected_behavior,
+                            finance_scope=finance_scope,
+                        )
+                        final_response = finguard_verify_result.final_response
+                        self._replace_last_final_assistant_message(messages, final_response)
+                        finguard_verify_status = "ok"
+                    except Exception as exc:
+                        finguard_verify_status = "failed"
+                        finguard_verify_error = str(exc)
+                        logger.warning("FinGuard verify failed; returning raw response: %s", exc)
+                    finally:
+                        finguard_verify_latency_ms = (
+                            time.perf_counter() - verify_started_at
+                        ) * 1000.0
+
         # Determine if conversation completed successfully
         completed = final_response is not None and api_call_count < self.max_iterations
 
+        self._apply_persist_user_message_override(messages)
+
         # Save trajectory if enabled
-        self._save_trajectory(messages, user_message, completed)
+        trajectory_user_message = (
+            original_user_message if finguard_guard_result is not None else user_message
+        )
+        self._save_trajectory(messages, trajectory_user_message, completed)
 
         # Clean up VM and browser for this task after conversation completes
         self._cleanup_task_resources(effective_task_id)
@@ -11760,6 +11990,19 @@ class AIAgent:
             "estimated_cost_usd": self.session_estimated_cost_usd,
             "cost_status": self.session_cost_status,
             "cost_source": self.session_cost_source,
+            "sources": normalized_sources,
+            "finguard": self._finguard_payload(
+                finguard_guard_result,
+                finguard_verify_result,
+                original_user_message=original_user_message,
+                sources=normalized_sources,
+                guard_status=finguard_guard_status,
+                guard_error=finguard_guard_error,
+                guard_latency_ms=finguard_guard_latency_ms,
+                verify_status=finguard_verify_status,
+                verify_error=finguard_verify_error,
+                verify_latency_ms=finguard_verify_latency_ms,
+            ),
         }
         # If a /steer landed after the final assistant turn (no more tool
         # batches to drain into), hand it back to the caller so it can be

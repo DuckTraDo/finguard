@@ -1,0 +1,53 @@
+name: FinGuard Tests
+
+on:
+  push:
+    paths:
+      - "finguard/**"
+      - "tests/finguard/**"
+      - "run_agent.py"
+      - "pyproject.toml"
+      - ".github/workflows/finguard-tests.yml"
+  pull_request:
+    paths:
+      - "finguard/**"
+      - "tests/finguard/**"
+      - "run_agent.py"
+      - "pyproject.toml"
+      - ".github/workflows/finguard-tests.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: finguard-tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  finguard:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86
+
+      - name: Set up Python 3.11
+        run: uv python install 3.11
+
+      - name: Install dependencies
+        run: |
+          uv venv .venv --python 3.11
+          source .venv/bin/activate
+          uv pip install -e ".[all,dev]"
+
+      - name: Run focused FinGuard tests
+        run: |
+          source .venv/bin/activate
+          python -m pytest tests/finguard -q -n 0
+        env:
+          OPENROUTER_API_KEY: ""
+          OPENAI_API_KEY: ""
+          NOUS_API_KEY: ""
