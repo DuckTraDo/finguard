@@ -2,9 +2,13 @@ import json
 from pathlib import Path
 
 from finguard.benchmark_smoke import (
+    _classify_provider_error_type,
+    BenchmarkRoutingProfile,
     DEFAULT_BASELINE_TAG,
     build_benchmark_row,
+    create_default_agent_factory,
     load_smoke_dataset,
+    resolve_routing_profile,
     run_smoke_benchmark,
 )
 
@@ -13,8 +17,20 @@ DATASET_PATH = Path("benchmarks/finguard/smoke_dataset.jsonl")
 
 
 class _FakeAgent:
-    def __init__(self, responses: dict[str, dict]):
+    def __init__(
+        self,
+        responses: dict[str, dict],
+        *,
+        model: str = "fixture-local-model",
+        base_url: str = "http://localhost:18080/v1",
+        provider: str = "custom",
+        api_mode: str = "chat_completions",
+    ):
         self._responses = responses
+        self.model = model
+        self.base_url = base_url
+        self.provider = provider
+        self.api_mode = api_mode
 
     def run_conversation(self, prompt: str):
         return self._responses[prompt]
@@ -36,6 +52,7 @@ def _result(
         "partial": False,
         "final_response": final_response,
         "finguard": {
+            "enabled": True,
             "passed": passed,
             "query_type": query_type,
             "expected_behavior": expected_behavior,
@@ -47,6 +64,10 @@ def _result(
             "source_count": source_count,
             "query_augmented": requires_explicit_dates and passed,
             "classification_reasons": ["fixture.reason"],
+            "guard_status": "ok",
+            "guard_error": None,
+            "verify_status": "ok",
+            "verify_error": None,
         },
     }
 
@@ -141,13 +162,97 @@ def test_build_benchmark_row_marks_baseline_mismatch():
         verification_status="verified",
     )
 
-    row = build_benchmark_row(case, result)
+    row = build_benchmark_row(case, result, baseline_mode="finguard")
 
+    assert row["baseline_mode"] == "finguard"
+    assert row["system_label"] == "finguard_gemma"
     assert row["baseline_match"] is False
+    assert row["actual"]["provider_mode"] is None
     assert row["matches"]["query_type"] is False
     assert row["matches"]["expected_behavior"] is False
     assert row["matches"]["requires_explicit_dates"] is False
     assert row["matches"]["refusal_observed"] is False
+    assert row["schema_errors"] == []
+
+
+def test_build_benchmark_row_uses_refusal_heuristic_for_direct_mode():
+    case = {
+        "id": "direct_refusal",
+        "prompt": "Should I buy AAPL right now?",
+        "expected": {
+            "query_type": "compliance_sensitive",
+            "expected_behavior": "refuse_with_disclaimer",
+            "requires_explicit_dates": True,
+            "refusal_expected": True,
+        },
+    }
+    result = {
+        "completed": True,
+        "partial": False,
+        "final_response": "I can't provide a personalized recommendation.",
+    }
+
+    row = build_benchmark_row(
+        case,
+        result,
+        baseline_mode="direct",
+        routing={
+            "system_label": "direct_remote",
+            "provider_mode": "remote",
+            "requested_provider": None,
+            "requested_model": "anthropic/claude-sonnet-4.6",
+            "resolved_model": "anthropic/claude-sonnet-4.6",
+            "resolved_endpoint": None,
+            "adapter_name": None,
+        },
+    )
+
+    assert row["baseline_mode"] == "direct"
+    assert row["system_label"] == "direct_remote"
+    assert row["actual"]["finguard_enabled"] is False
+    assert row["actual"]["provider_mode"] == "remote"
+    assert row["actual"]["refusal_observed"] is True
+    assert row["actual"]["query_type"] is None
+    assert row["schema_errors"] == []
+
+
+def test_build_benchmark_row_flags_incomplete_result_without_error():
+    case = {
+        "id": "incomplete_case",
+        "prompt": "What is the latest default rate?",
+        "expected": {
+            "query_type": "factual",
+            "expected_behavior": "answer_normally",
+            "requires_explicit_dates": True,
+            "refusal_expected": False,
+        },
+    }
+    result = {
+        "completed": False,
+        "partial": False,
+        "final_response": "",
+        "finguard": {
+            "enabled": False,
+        },
+    }
+
+    row = build_benchmark_row(
+        case,
+        result,
+        baseline_mode="vanilla",
+        routing={
+            "system_label": "hermes_vanilla_gemma",
+            "provider_mode": "local",
+            "requested_provider": "custom",
+            "requested_model": "fixture-local-model",
+            "resolved_model": "fixture-local-model",
+            "resolved_endpoint": "http://localhost:18080/v1",
+            "adapter_name": "openai_chat_adapter",
+        },
+    )
+
+    assert row["actual"]["run_error"] == "agent_returned_incomplete_without_error"
+    assert row["actual"]["provider_error_type"] == "incomplete_without_error"
     assert row["schema_errors"] == []
 
 
@@ -158,7 +263,12 @@ def test_run_smoke_benchmark_writes_expected_summary(tmp_path):
         output_dir=output_dir,
         dataset_name="fixture_smoke",
         baseline_tag=DEFAULT_BASELINE_TAG,
+        baseline_mode="finguard",
         agent_factory=_fixture_agent_factory(),
+        system_label="finguard_gemma",
+        model="fixture-local-model",
+        provider="custom",
+        base_url="http://localhost:18080/v1",
     )
 
     expected_summary = json.loads(
@@ -174,3 +284,62 @@ def test_run_smoke_benchmark_writes_expected_summary(tmp_path):
     assert len(written_rows) == 6
     assert all(row["schema_errors"] == [] for row in written_rows)
     assert all(row["baseline_match"] is True for row in written_rows)
+    assert all(row["baseline_mode"] == "finguard" for row in written_rows)
+    assert all(row["system_label"] == "finguard_gemma" for row in written_rows)
+    assert all(row["actual"]["provider_mode"] == "local" for row in written_rows)
+    assert all(row["actual"]["resolved_endpoint"] == "http://localhost:18080/v1" for row in written_rows)
+    assert all(row["actual"]["adapter_name"] == "openai_chat_adapter" for row in written_rows)
+
+
+def test_resolve_routing_profile_defaults_to_local_gemma(monkeypatch):
+    monkeypatch.setattr(
+        "finguard.benchmark_smoke._probe_single_model_id",
+        lambda base_url: "gemma-4-31B-it-Q6_K.gguf",
+    )
+
+    profile = resolve_routing_profile(baseline_mode="finguard")
+
+    assert profile.system_label == "finguard_gemma"
+    assert profile.provider_mode == "local"
+    assert profile.requested_provider == "custom"
+    assert profile.requested_endpoint == "http://localhost:18080/v1"
+    assert profile.requested_model == "gemma-4-31B-it-Q6_K.gguf"
+
+
+def test_classify_provider_error_types():
+    assert (
+        _classify_provider_error_type("Enable JavaScript and cookies to continue __cf_chl")
+        == "cloudflare_challenge"
+    )
+    assert _classify_provider_error_type("Model is not supported by this account") == "unsupported_model"
+    assert _classify_provider_error_type("Unable to connect to the remote server") == "endpoint_unreachable"
+    assert (
+        _classify_provider_error_type(
+            "Model gemma has a context window of 32,768 tokens, which is below the minimum 64,000 required by Hermes Agent."
+        )
+        == "model_context_too_small"
+    )
+
+
+def test_benchmark_local_smoke_profile_uses_lightweight_local_runner():
+    profile = BenchmarkRoutingProfile(
+        system_label="finguard_gemma",
+        baseline_mode="finguard",
+        provider_mode="local",
+        requested_provider="custom",
+        requested_model="fixture-local-model",
+        requested_endpoint="http://localhost:18080/v1",
+        requested_api_key="no-key-required",
+    )
+
+    factory = create_default_agent_factory(
+        routing_profile=profile,
+        max_tokens=128,
+        run_profile="benchmark_local_smoke_profile",
+    )
+    agent = factory()
+
+    assert agent.model == "fixture-local-model"
+    assert agent.base_url == "http://localhost:18080/v1"
+    assert agent.api_mode == "chat_completions"
+    assert agent.max_tokens == 128

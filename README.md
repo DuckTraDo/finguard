@@ -180,6 +180,21 @@ python -m pytest tests/finguard/test_snapshots.py -q -n 0
 
 The FinGuard behavior contract is documented in [docs/finguard-behavior-matrix.md](docs/finguard-behavior-matrix.md).
 
+For local FinGuard benchmark smoke runs, start with the benchmark-only local profile:
+
+```powershell
+python -m finguard.benchmark_smoke `
+  --dataset-path benchmarks/finguard/smoke_dataset.jsonl `
+  --output-dir data/finguard_benchmark_smoke/local_profile_smoke `
+  --baseline-tag finguard-classifier-verify-v2-green `
+  --baseline-mode finguard `
+  --run-profile benchmark_local_smoke_profile `
+  --limit 3 `
+  --max-tokens 192
+```
+
+`benchmark_local_smoke_profile` is the stable local smoke baseline: short benchmark prompt, localhost routing, no tools, no continuation loop, and `think=false`. It validates data/schema/routing and small baseline comparisons. Omit `--run-profile benchmark_local_smoke_profile` when you intentionally want the full Hermes agent benchmark with the normal system prompt, tools, and continuation behavior.
+
 > **RL Training (optional):** To work on the RL/Tinker-Atropos integration:
 > ```bash
 > git submodule update --init tinker-atropos
