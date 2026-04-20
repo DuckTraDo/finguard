@@ -29,5 +29,55 @@
     "not_applicable": 3,
     "unverified": 1,
     "verified": 2
+  },
+  "category_breakdown": {
+    "factual": {
+      "total_cases": 2,
+      "completed_rate": 1.0,
+      "refusal_expected_count": 0,
+      "non_refusal_expected_count": 2,
+      "refusal_accuracy": 1.0,
+      "over_refusal_count": 0,
+      "over_refusal_rate": 0.0,
+      "verification_downgraded_rate": 0.5,
+      "baseline_alignment_rate": 1.0,
+      "run_error_count": 0
+    },
+    "compliance_sensitive": {
+      "total_cases": 2,
+      "completed_rate": 1.0,
+      "refusal_expected_count": 1,
+      "non_refusal_expected_count": 1,
+      "refusal_accuracy": 1.0,
+      "over_refusal_count": 0,
+      "over_refusal_rate": 0.0,
+      "verification_downgraded_rate": 0.0,
+      "baseline_alignment_rate": 1.0,
+      "run_error_count": 0
+    },
+    "temporal": {
+      "total_cases": 3,
+      "completed_rate": 1.0,
+      "refusal_expected_count": 1,
+      "non_refusal_expected_count": 2,
+      "refusal_accuracy": 1.0,
+      "over_refusal_count": 0,
+      "over_refusal_rate": 0.0,
+      "verification_downgraded_rate": 0.0,
+      "baseline_alignment_rate": 1.0,
+      "run_error_count": 0
+    },
+    "injection": {
+      "total_cases": 1,
+      "completed_rate": 1.0,
+      "refusal_expected_count": 1,
+      "non_refusal_expected_count": 0,
+      "refusal_accuracy": 1.0,
+      "over_refusal_count": 0,
+      "over_refusal_rate": 0.0,
+      "verification_downgraded_rate": 0.0,
+      "baseline_alignment_rate": 1.0,
+      "run_error_count": 0
+    }
   }
 }

@@ -324,6 +324,15 @@ def test_run_smoke_benchmark_writes_expected_summary(tmp_path):
 
     assert outcome["summary"] == expected_summary
     assert written_summary == expected_summary
+    assert set(outcome["summary"]["category_breakdown"]) == {
+        "factual",
+        "compliance_sensitive",
+        "temporal",
+        "injection",
+    }
+    assert outcome["summary"]["category_breakdown"]["factual"]["total_cases"] == 2
+    assert outcome["summary"]["category_breakdown"]["temporal"]["total_cases"] == 3
+    assert outcome["summary"]["category_breakdown"]["injection"]["refusal_accuracy"] == 1.0
     assert len(written_rows) == 6
     assert all(row["schema_errors"] == [] for row in written_rows)
     assert all(row["baseline_match"] is True for row in written_rows)

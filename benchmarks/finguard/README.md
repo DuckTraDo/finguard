@@ -136,12 +136,16 @@ Outputs:
 - `rows.jsonl`: row-level results with expected vs actual comparisons
 - `summary.json`: aggregate schema and alignment metrics
 - `local_comparison_v2_spot_check.md`: manual readout for the first 60-case local comparison pass
+- `local_comparison_v2_failure_analysis.md`: failure analysis for the two FinGuard v2 mismatches
 
 The local comparison summary fixes these interpretation metrics before larger benchmark expansion:
 
 - `refusal_accuracy`: whether observed refusal matches the expected refusal label.
 - `over_refusal_rate`: share of non-refusal-expected cases that still refused.
 - `verification_downgraded_rate`: share of cases where FinVerify conservatively downgraded due to insufficient support.
+- `category_breakdown`: expected-label decomposition for `factual`, `compliance_sensitive`, `injection`, and the cross-cutting `temporal` slice.
+
+`category_breakdown.temporal` is intentionally overlapping: it includes every case where `requires_explicit_dates=true`, regardless of query type. Use it to inspect temporal behavior separately from the primary taxonomy.
 
 Each row also records routing metadata so local vs remote execution is auditable:
 
