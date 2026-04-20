@@ -136,6 +136,7 @@ Outputs:
 - `rows.jsonl`: row-level results with expected vs actual comparisons
 - `summary.json`: aggregate schema and alignment metrics
 - `local_comparison_v2_benchmark_note.md`: formal result note for the first 60-case local comparison node
+- `local_comparison_v2_results_draft.md`: Results/Method writing draft derived from the formal result note
 - `local_comparison_v2_spot_check.md`: manual readout for the first 60-case local comparison pass
 - `local_comparison_v2_failure_analysis.md`: failure analysis for the two FinGuard v2 mismatches
 
