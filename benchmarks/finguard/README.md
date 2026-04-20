@@ -27,8 +27,10 @@ The current layered local comparison sets are:
 - `local_comparison_v1.jsonl`: frozen 25-case comparison baseline.
 - `local_comparison_v2_increment.jsonl`: 35 new stratified cases only.
 - `local_comparison_v2.jsonl`: combined 60-case set used for the next local smoke comparison.
+- `local_comparison_v3_increment.jsonl`: 30 new stratified cases for the next sample-expansion axis.
+- `local_comparison_v3.jsonl`: combined 90-case set used to test whether the v2 local-smoke conclusion holds at a larger sample size.
 
-The v2 increment is stratified instead of random. It expands:
+The v2 and v3 increments are stratified instead of random. They expand:
 
 - factual and temporal factual finance questions
 - numeric factual questions for traceability checks
@@ -136,9 +138,10 @@ Outputs:
 - `rows.jsonl`: row-level results with expected vs actual comparisons
 - `summary.json`: aggregate schema and alignment metrics
 - `local_comparison_v2_benchmark_note.md`: formal result note for the first 60-case local comparison node
-- `local_comparison_v2_results_draft.md`: Results/Method writing draft derived from the formal result note
+- `local_comparison_v2_results_draft.md`: citable Results/Method result package derived from the formal result note
 - `local_comparison_v2_spot_check.md`: manual readout for the first 60-case local comparison pass
 - `local_comparison_v2_failure_analysis.md`: failure analysis for the two FinGuard v2 mismatches
+- `local_comparison_v3_sample_expansion_note.md`: 90-case local-smoke sample expansion check before any naive RAG baseline
 
 The local comparison summary fixes these interpretation metrics before larger benchmark expansion:
 

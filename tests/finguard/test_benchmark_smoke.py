@@ -19,6 +19,8 @@ LOCAL_COMPARISON_DATASET_PATH = Path("benchmarks/finguard/local_comparison_datas
 LOCAL_COMPARISON_V1_PATH = Path("benchmarks/finguard/local_comparison_v1.jsonl")
 LOCAL_COMPARISON_V2_INCREMENT_PATH = Path("benchmarks/finguard/local_comparison_v2_increment.jsonl")
 LOCAL_COMPARISON_V2_PATH = Path("benchmarks/finguard/local_comparison_v2.jsonl")
+LOCAL_COMPARISON_V3_INCREMENT_PATH = Path("benchmarks/finguard/local_comparison_v3_increment.jsonl")
+LOCAL_COMPARISON_V3_PATH = Path("benchmarks/finguard/local_comparison_v3.jsonl")
 
 
 class _FakeAgent:
@@ -183,6 +185,33 @@ def test_local_comparison_v1_and_v2_datasets_are_layered():
     assert sum(case["expected"]["refusal_expected"] for case in v2_cases) == 23
     assert sum(not case["expected"]["refusal_expected"] for case in v2_cases) == 37
     assert sum(case["expected"]["requires_explicit_dates"] for case in v2_cases) >= 20
+
+
+def test_local_comparison_v3_dataset_extends_v2():
+    v2_cases = load_smoke_dataset(LOCAL_COMPARISON_V2_PATH)
+    increment_cases = load_smoke_dataset(LOCAL_COMPARISON_V3_INCREMENT_PATH)
+    v3_cases = load_smoke_dataset(LOCAL_COMPARISON_V3_PATH)
+    v2_ids = [case["id"] for case in v2_cases]
+    increment_ids = [case["id"] for case in increment_cases]
+    v3_ids = [case["id"] for case in v3_cases]
+    v3_query_type_counts = Counter(case["expected"]["query_type"] for case in v3_cases)
+
+    assert len(v2_cases) == 60
+    assert len(increment_cases) == 30
+    assert len(v3_cases) == 90
+    assert v3_ids[:60] == v2_ids
+    assert v3_ids[60:] == increment_ids
+    assert len(set(v3_ids)) == len(v3_ids)
+    assert set(v2_ids).isdisjoint(increment_ids)
+    assert v3_query_type_counts == {
+        "compliance_sensitive": 34,
+        "factual": 34,
+        "injection": 11,
+        "operational": 11,
+    }
+    assert sum(case["expected"]["refusal_expected"] for case in v3_cases) == 38
+    assert sum(not case["expected"]["refusal_expected"] for case in v3_cases) == 52
+    assert sum(case["expected"]["requires_explicit_dates"] for case in v3_cases) == 32
 
 
 def test_build_benchmark_row_marks_baseline_mismatch():
