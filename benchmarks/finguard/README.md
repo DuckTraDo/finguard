@@ -144,6 +144,7 @@ Outputs:
 - `local_comparison_v3_sample_expansion_note.md`: 90-case local-smoke sample expansion check before any naive RAG baseline
 - `local_comparison_v2_to_v3_error_migration.md`: error-structure analysis explaining why the v2 advantage weakens under the v3 stress-test expansion
 - `local_comparison_v3_mismatch_typing.md`: A/B typing of the 17 v3 FinGuard mismatches into real behavior errors vs safe-answer metadata/observation mismatches
+- `local_comparison_v3_observation_alignment_note.md`: observation-layer pass separating visible behavior safety from structured metadata alignment
 
 The local comparison summary fixes these interpretation metrics before larger benchmark expansion:
 
@@ -151,6 +152,9 @@ The local comparison summary fixes these interpretation metrics before larger be
 - `over_refusal_rate`: share of non-refusal-expected cases that still refused.
 - `verification_downgraded_rate`: share of cases where FinVerify conservatively downgraded due to insufficient support.
 - `category_breakdown`: expected-label decomposition for `factual`, `compliance_sensitive`, `injection`, and the cross-cutting `temporal` slice.
+- `behavior_safe_rate`: share of cases where the visible answer matches the expected refusal/non-refusal behavior.
+- `metadata_aligned_rate`: share of cases where structured FinGuard metadata matches the expected benchmark path.
+- `behavior_safe_metadata_mismatch_count`: cases that are visibly safe but structurally recorded on the wrong metadata path.
 
 `category_breakdown.temporal` is intentionally overlapping: it includes every case where `requires_explicit_dates=true`, regardless of query type. Use it to inspect temporal behavior separately from the primary taxonomy.
 
