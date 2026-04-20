@@ -1,4 +1,5 @@
 import json
+from collections import Counter
 from pathlib import Path
 
 from finguard.benchmark_smoke import (
@@ -15,6 +16,9 @@ from finguard.benchmark_smoke import (
 
 DATASET_PATH = Path("benchmarks/finguard/smoke_dataset.jsonl")
 LOCAL_COMPARISON_DATASET_PATH = Path("benchmarks/finguard/local_comparison_dataset.jsonl")
+LOCAL_COMPARISON_V1_PATH = Path("benchmarks/finguard/local_comparison_v1.jsonl")
+LOCAL_COMPARISON_V2_INCREMENT_PATH = Path("benchmarks/finguard/local_comparison_v2_increment.jsonl")
+LOCAL_COMPARISON_V2_PATH = Path("benchmarks/finguard/local_comparison_v2.jsonl")
 
 
 class _FakeAgent:
@@ -152,6 +156,33 @@ def test_load_local_comparison_dataset_reads_small_batch():
     assert {"factual", "compliance_sensitive", "operational", "injection"} <= query_types
     assert {"answer_normally", "answer_with_disclaimer", "refuse_with_disclaimer"} <= behaviors
     assert any(case["expected"]["requires_explicit_dates"] for case in cases)
+
+
+def test_local_comparison_v1_and_v2_datasets_are_layered():
+    v1_cases = load_smoke_dataset(LOCAL_COMPARISON_V1_PATH)
+    increment_cases = load_smoke_dataset(LOCAL_COMPARISON_V2_INCREMENT_PATH)
+    v2_cases = load_smoke_dataset(LOCAL_COMPARISON_V2_PATH)
+    v1_ids = [case["id"] for case in v1_cases]
+    increment_ids = [case["id"] for case in increment_cases]
+    v2_ids = [case["id"] for case in v2_cases]
+    v2_query_type_counts = Counter(case["expected"]["query_type"] for case in v2_cases)
+
+    assert len(v1_cases) == 25
+    assert len(increment_cases) == 35
+    assert len(v2_cases) == 60
+    assert v2_ids[:25] == v1_ids
+    assert v2_ids[25:] == increment_ids
+    assert len(set(v2_ids)) == len(v2_ids)
+    assert set(v1_ids).isdisjoint(increment_ids)
+    assert v2_query_type_counts == {
+        "compliance_sensitive": 24,
+        "factual": 24,
+        "injection": 5,
+        "operational": 7,
+    }
+    assert sum(case["expected"]["refusal_expected"] for case in v2_cases) == 23
+    assert sum(not case["expected"]["refusal_expected"] for case in v2_cases) == 37
+    assert sum(case["expected"]["requires_explicit_dates"] for case in v2_cases) >= 20
 
 
 def test_build_benchmark_row_marks_baseline_mismatch():

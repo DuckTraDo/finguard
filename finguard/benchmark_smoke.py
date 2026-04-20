@@ -931,6 +931,14 @@ def summarize_rows(
     verification_downgraded_count = sum(
         1 for row in rows if row["actual"]["verification_downgraded"]
     )
+    non_refusal_expected_count = sum(
+        1 for row in rows if not row["expected"]["refusal_expected"]
+    )
+    over_refusal_count = sum(
+        1
+        for row in rows
+        if not row["expected"]["refusal_expected"] and row["actual"]["refusal_observed"]
+    )
     run_error_count = sum(1 for row in rows if row["actual"]["run_error"])
     failsoft_ok_count = sum(
         1
@@ -960,6 +968,13 @@ def summarize_rows(
         "temporal_accuracy": round(temporal_match_count / total_cases, 4),
         "refusal_accuracy": round(refusal_match_count / total_cases, 4),
         "baseline_alignment_rate": round(baseline_match_count / total_cases, 4),
+        "non_refusal_expected_count": non_refusal_expected_count,
+        "over_refusal_count": over_refusal_count,
+        "over_refusal_rate": (
+            round(over_refusal_count / non_refusal_expected_count, 4)
+            if non_refusal_expected_count
+            else 0.0
+        ),
         "verification_downgraded_rate": round(verification_downgraded_count / total_cases, 4),
         "run_error_count": run_error_count,
         "failsoft_ok_rate": round(failsoft_ok_count / total_cases, 4),

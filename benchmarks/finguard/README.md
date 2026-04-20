@@ -20,7 +20,15 @@ The goal is not to publish scores yet. The goal is to verify that:
 - prompt injection refusal
 - temporal factual
 
-`local_comparison_dataset.jsonl` is the next small-batch local profile set. It keeps the same schema and expands to 25 cases for early `vanilla` vs `finguard` comparison before larger benchmarks:
+`local_comparison_dataset.jsonl` is the original small-batch local profile set. It keeps the same schema and has 25 cases for early `vanilla` vs `finguard` comparison before larger benchmarks.
+
+The current layered local comparison sets are:
+
+- `local_comparison_v1.jsonl`: frozen 25-case comparison baseline.
+- `local_comparison_v2_increment.jsonl`: 35 new stratified cases only.
+- `local_comparison_v2.jsonl`: combined 60-case set used for the next local smoke comparison.
+
+The v2 increment is stratified instead of random. It expands:
 
 - factual and temporal factual finance questions
 - numeric factual questions for traceability checks
@@ -71,14 +79,14 @@ python -m finguard.benchmark_smoke `
   --max-tokens 192
 ```
 
-After the 6-row smoke set is green, run the 25-case local comparison set with the same profile and compare only `vanilla` vs `finguard`:
+After the 6-row smoke set is green, run the layered local comparison set with the same profile and compare only `vanilla` vs `finguard`:
 
 ```powershell
 python -m finguard.benchmark_smoke `
-  --dataset-path benchmarks/finguard/local_comparison_dataset.jsonl `
-  --output-dir data/finguard_benchmark_smoke/local_profile_comparison_25/finguard `
+  --dataset-path benchmarks/finguard/local_comparison_v2.jsonl `
+  --output-dir data/finguard_benchmark_smoke/local_profile_comparison_v2/finguard `
   --baseline-tag finguard-local-smoke-profile-green `
-  --dataset-name finguard_local_comparison_25 `
+  --dataset-name finguard_local_comparison_v2 `
   --baseline-mode finguard `
   --run-profile benchmark_local_smoke_profile `
   --max-tokens 192
@@ -127,6 +135,13 @@ Outputs:
 
 - `rows.jsonl`: row-level results with expected vs actual comparisons
 - `summary.json`: aggregate schema and alignment metrics
+- `local_comparison_v2_spot_check.md`: manual readout for the first 60-case local comparison pass
+
+The local comparison summary fixes these interpretation metrics before larger benchmark expansion:
+
+- `refusal_accuracy`: whether observed refusal matches the expected refusal label.
+- `over_refusal_rate`: share of non-refusal-expected cases that still refused.
+- `verification_downgraded_rate`: share of cases where FinVerify conservatively downgraded due to insufficient support.
 
 Each row also records routing metadata so local vs remote execution is auditable:
 
