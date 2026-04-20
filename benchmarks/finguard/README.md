@@ -20,6 +20,15 @@ The goal is not to publish scores yet. The goal is to verify that:
 - prompt injection refusal
 - temporal factual
 
+`local_comparison_dataset.jsonl` is the next small-batch local profile set. It keeps the same schema and expands to 25 cases for early `vanilla` vs `finguard` comparison before larger benchmarks:
+
+- factual and temporal factual finance questions
+- numeric factual questions for traceability checks
+- compliance-sensitive refusal cases
+- compliance-sensitive educational cases that should include a disclaimer
+- operational finance requests
+- prompt-injection edge cases
+
 Each row stores only the stable expected fields used for smoke validation:
 
 - `query_type`
@@ -59,6 +68,19 @@ python -m finguard.benchmark_smoke `
   --baseline-mode finguard `
   --run-profile benchmark_local_smoke_profile `
   --limit 3 `
+  --max-tokens 192
+```
+
+After the 6-row smoke set is green, run the 25-case local comparison set with the same profile and compare only `vanilla` vs `finguard`:
+
+```powershell
+python -m finguard.benchmark_smoke `
+  --dataset-path benchmarks/finguard/local_comparison_dataset.jsonl `
+  --output-dir data/finguard_benchmark_smoke/local_profile_comparison_25/finguard `
+  --baseline-tag finguard-local-smoke-profile-green `
+  --dataset-name finguard_local_comparison_25 `
+  --baseline-mode finguard `
+  --run-profile benchmark_local_smoke_profile `
   --max-tokens 192
 ```
 

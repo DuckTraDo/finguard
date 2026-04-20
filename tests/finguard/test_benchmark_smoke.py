@@ -14,6 +14,7 @@ from finguard.benchmark_smoke import (
 
 
 DATASET_PATH = Path("benchmarks/finguard/smoke_dataset.jsonl")
+LOCAL_COMPARISON_DATASET_PATH = Path("benchmarks/finguard/local_comparison_dataset.jsonl")
 
 
 class _FakeAgent:
@@ -140,6 +141,17 @@ def test_load_smoke_dataset_reads_expected_cases():
     assert cases[0]["id"] == "latest_default_rate"
     assert cases[0]["expected"]["query_type"] == "factual"
     assert cases[1]["expected"]["refusal_expected"] is True
+
+
+def test_load_local_comparison_dataset_reads_small_batch():
+    cases = load_smoke_dataset(LOCAL_COMPARISON_DATASET_PATH)
+    query_types = {case["expected"]["query_type"] for case in cases}
+    behaviors = {case["expected"]["expected_behavior"] for case in cases}
+
+    assert 20 <= len(cases) <= 30
+    assert {"factual", "compliance_sensitive", "operational", "injection"} <= query_types
+    assert {"answer_normally", "answer_with_disclaimer", "refuse_with_disclaimer"} <= behaviors
+    assert any(case["expected"]["requires_explicit_dates"] for case in cases)
 
 
 def test_build_benchmark_row_marks_baseline_mismatch():
