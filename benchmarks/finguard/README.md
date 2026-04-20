@@ -142,6 +142,7 @@ Outputs:
 - `local_comparison_v2_spot_check.md`: manual readout for the first 60-case local comparison pass
 - `local_comparison_v2_failure_analysis.md`: failure analysis for the two FinGuard v2 mismatches
 - `local_comparison_v3_sample_expansion_note.md`: 90-case local-smoke sample expansion check before any naive RAG baseline
+- `local_comparison_v2_to_v3_error_migration.md`: error-structure analysis explaining why the v2 advantage weakens under the v3 stress-test expansion
 
 The local comparison summary fixes these interpretation metrics before larger benchmark expansion:
 
