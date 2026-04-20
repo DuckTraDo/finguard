@@ -1,0 +1,131 @@
+\documentclass[11pt]{article}
+
+\usepackage[margin=1in]{geometry}
+\usepackage{booktabs}
+\usepackage{natbib}
+\usepackage{hyperref}
+\usepackage{url}
+\usepackage{xcolor}
+
+\title{FinGuard: A Lightweight Guard/Verify Wrapper for Safer Financial Assistants}
+\author{
+  Author Name(s)\\
+  Institution / Lab / Independent Research\\
+  \texttt{email@example.com}
+}
+\date{}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+Financial assistants need to answer educational questions while refusing personalized advice, account operations, and prompt-injection attempts. We present FinGuard, a lightweight guard/verify wrapper for a Hermes-style financial assistant, and evaluate it under a controlled local smoke profile designed to isolate safety routing, refusal behavior, and benchmark observability from full agent tool use. On a 90-case stratified local benchmark evaluated on Gemma 31B \citep{gemma4_2026}, FinGuard achieves the strongest aligned visible behavior safety (0.989) compared with vanilla local generation (0.933) and a static naive RAG baseline (0.856), while reducing measured over-refusal to zero. We then repeat the vanilla-vs-FinGuard comparison on a Qwen3.5-27B local endpoint \citep{qwen35_2026} and observe the same pattern: FinGuard improves aligned behavior safety from 0.922 to 1.000 and reduces over-refusal from 0.154 to 0.000. These results suggest that the gains come from the wrapper architecture rather than single-model prompt tuning, while leaving full-agent and retrieval-heavy evaluations for future work.
+\end{abstract}
+
+\section{Introduction}
+Financial assistant safety is not only a refusal problem. A useful assistant must answer ordinary educational questions, handle temporal and numeric claims carefully, refuse personalized investment recommendations, decline account operations, and resist prompt-injection attempts. Systems that refuse broadly can look safe while being unhelpful; systems that answer broadly can look helpful while violating compliance-sensitive boundaries.
+
+FinGuard addresses this tension by adding a minimal runtime wrapper around an existing agentic assistant rather than replacing the assistant with a new RAG stack or a fine-tuned model. The wrapper classifies and routes user queries before generation, then verifies or downgrades unsupported claims after generation. This work asks whether that wrapper improves financial safety behavior and observability under a reproducible local smoke profile.
+
+\paragraph{Contributions.}
+We make three contributions. First, we introduce a two-layer guard/verify wrapper for financial assistant behavior. Second, we define a local smoke benchmark profile with structured metadata for refusal, visible safety, over-refusal, and observation alignment. Third, we evaluate vanilla generation, FinGuard, and static naive RAG on the same 90-case benchmark, then verify that the vanilla-vs-FinGuard advantage transfers from Gemma 31B to Qwen3.5-27B without model-specific tuning.
+
+\section{Related Work}
+Financial-domain benchmarks such as FinanceBench \citep{islam2023financebench} and CFinBench \citep{nie2024cfinbench} evaluate financial question answering and domain knowledge. They expose factual and reasoning limitations, but they primarily ask whether a model can produce the right answer. FinGuard instead focuses on whether a financial assistant routes, refuses, answers with disclaimers, or downgrades claims appropriately when compliance, temporal, operational, or prompt-injection boundaries are crossed.
+
+Selective refusal and safety benchmarks study when models should decline unsafe or unsupported requests. RefusalBench \citep{muhamed2025refusalbench} examines refusal behavior under flawed grounding contexts, while TRIDENT / Trident-Bench \citep{hui2025trident} targets safety in high-stakes domains including finance, law, and medicine. FinGuard builds on this line but separates structured metadata refusal, raw visible refusal, and observer-aligned visible refusal, which helps distinguish unsafe behavior from observation or metadata mismatch.
+
+Guardrail systems such as NeMo Guardrails \citep{rebedea2023nemo}, Llama Guard \citep{inan2023llamaguard}, and Constitutional AI \citep{bai2022constitutional} show the value of explicit policy enforcement and safety taxonomies. Agentic systems add tool-use and prompt-injection risks \citep{yao2023react,debenedetti2024agentdojo,ruan2024toolemu}. FinGuard is narrower than these general frameworks: it is a minimal wrapper for financial document-QA settings, targeting refusal correctness, temporal handling, source normalization, and numeric traceability without retraining the base model.
+
+\section{Method}
+\subsection{Local Smoke Profile}
+All primary results use \texttt{benchmark\_local\_smoke\_profile}. This profile routes to a local model through \url{http://localhost:18080/v1}, uses a short benchmark-only prompt, disables tools, disables continuation, sends \texttt{think=false}, and caps generation with \texttt{--max-tokens 192}. It is designed to measure refusal behavior, over-refusal, visible safety, and wrapper metadata under reproducible local conditions; it is not the full Hermes agent path.
+
+\subsection{Dataset and Baselines}
+The dataset is \texttt{local\_comparison\_v3.jsonl}, a 90-case stratified local benchmark covering factual finance, temporal factual queries, compliance-sensitive refusal, disclaimered educational finance, operational account/trade requests, and prompt-injection edge cases. Each case stores stable expected labels for query type, expected behavior, date requirements, and refusal expectation.
+
+We compare three Gemma 31B local-smoke baselines: \texttt{vanilla}, \texttt{finguard}, and \texttt{naive\_rag}. The naive RAG baseline uses static snippets in the prompt \citep{lewis2020rag}; it is not a production retriever. For cross-model validation, the same endpoint address was reused sequentially: the underlying model was swapped between Gemma 31B and Qwen3.5-27B between runs, with only one model served at any given time.
+
+\subsection{Metrics}
+We report metadata refusal accuracy, raw visible refusal accuracy, aligned visible refusal accuracy, aligned behavior-safe rate, over-refusal rate, and metadata alignment. The raw/aligned split is important because observer-only wording alignment can improve measurement coverage without changing model behavior.
+
+\section{Results}
+\subsection{Gemma 31B Three-Way Comparison}
+Table~\ref{tab:gemma-main} shows the primary Gemma 31B local-smoke comparison. FinGuard is strongest across all primary safety views and is the only baseline with zero measured over-refusal and nonzero metadata alignment.
+
+\begin{table}[t]
+\centering
+\small
+\begin{tabular}{lrrrrrr}
+\toprule
+Baseline & Metadata & Raw visible & Aligned visible & Safe & Over-refusal & Metadata aligned \\
+\midrule
+\texttt{vanilla} & 0.811 & 0.933 & 0.933 & 0.933 & 0.019 & 0.000 \\
+\texttt{finguard} & 0.856 & 0.989 & 0.989 & 0.989 & 0.000 & 0.811 \\
+\texttt{naive\_rag} & 0.767 & 0.822 & 0.856 & 0.856 & 0.039 & 0.000 \\
+\bottomrule
+\end{tabular}
+\caption{Primary Gemma 31B local-smoke comparison over 90 cases. ``Safe'' is aligned behavior-safe rate.}
+\label{tab:gemma-main}
+\end{table}
+
+\subsection{Category Breakdown}
+FinGuard matches or exceeds the other baselines in every category. Aligned behavior-safe rates are 1.000 for factual, compliance-sensitive, and temporal slices, and 0.909 for injection. Injection remains the hardest slice for all systems, but FinGuard remains substantially stronger than vanilla (0.727) and naive RAG (0.455).
+
+\subsection{Cross-Model Generalization}
+Table~\ref{tab:cross-model} tests whether the FinGuard advantage transfers from Gemma 31B to Qwen3.5-27B. On both models, FinGuard improves metadata refusal accuracy, raw visible refusal accuracy, aligned visible refusal accuracy, aligned behavior safety, and over-refusal. The Qwen result also shows why raw/aligned reporting matters: visible refusal accuracy rises from 0.878 to 0.922 for \texttt{vanilla\_qwen}, and from 0.944 to 1.000 for \texttt{finguard\_qwen}, after observer-only wording alignment.
+
+\begin{table}[t]
+\centering
+\small
+\begin{tabular}{llrrrrr}
+\toprule
+Model & Baseline & Metadata & Raw visible & Aligned visible & Safe & Over-refusal \\
+\midrule
+Gemma 31B & \texttt{vanilla} & 0.811 & 0.933 & 0.933 & 0.933 & 0.019 \\
+Gemma 31B & \texttt{finguard} & 0.856 & 0.989 & 0.989 & 0.989 & 0.000 \\
+Qwen3.5-27B & \texttt{vanilla\_qwen} & 0.778 & 0.878 & 0.922 & 0.922 & 0.154 \\
+Qwen3.5-27B & \texttt{finguard\_qwen} & 0.856 & 0.944 & 1.000 & 1.000 & 0.000 \\
+\bottomrule
+\end{tabular}
+\caption{Cross-model local-smoke comparison. Qwen and Gemma were served sequentially through the same local endpoint, not simultaneously.}
+\label{tab:cross-model}
+\end{table}
+
+\section{Discussion}
+Observation alignment does not eliminate FinGuard's advantage. After raw/aligned refusal views are separated, FinGuard still leads naive RAG on aligned behavior-safe rate (0.989 vs. 0.856), aligned visible refusal accuracy (0.989 vs. 0.856), metadata refusal accuracy (0.856 vs. 0.767), and over-refusal (0.000 vs. 0.039).
+
+The cross-model result strengthens the wrapper interpretation. Qwen changes the base model behavior substantially: vanilla Qwen has lower metadata refusal accuracy and higher over-refusal than vanilla Gemma. FinGuard restores the same structured pattern, raising metadata refusal accuracy to 0.856, aligned behavior safety to 1.000, and over-refusal to 0.000. This makes the result less likely to be a Gemma-specific wording artifact.
+
+\section{Limitations}
+This evaluation uses a local smoke profile rather than the full Hermes agent path with tools and continuation. The benchmark has 90 cases, enough for local comparison but not a large-scale production benchmark. The naive RAG baseline uses static snippets rather than a production retriever. The Qwen result covers only \texttt{vanilla\_qwen} and \texttt{finguard\_qwen}; it does not include \texttt{naive\_rag\_qwen}. Finally, observation alignment remains a benchmark heuristic, and metadata-aligned metrics are asymmetric because only FinGuard emits structured guard/verify metadata.
+
+\section{Conclusion}
+Under a controlled local smoke profile, FinGuard improves visible safety behavior, reduces over-refusal, and provides structured observability compared with vanilla local generation and static naive RAG on Gemma 31B. The vanilla-vs-FinGuard advantage also transfers from Gemma 31B to Qwen3.5-27B, supporting the interpretation that the benefit comes from the wrapper architecture rather than single-model prompt engineering.
+
+\bibliographystyle{plainnat}
+\bibliography{references}
+
+\appendix
+\section{Diagnostic Failure Typing}
+Table~\ref{tab:failure-typing} summarizes diagnostic mismatch typing. This table is intended for the appendix in workshop-length submissions.
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{lrrrrrr}
+\toprule
+Boundary & FG total & FG A & FG B & RAG total & RAG A & RAG B \\
+\midrule
+Injection & 7 & 1 & 6 & 8 & 0 & 8 \\
+Operational & 3 & 0 & 3 & 5 & 0 & 5 \\
+Personalized/educational & 7 & 0 & 7 & 3 & 2 & 1 \\
+Other & 0 & 0 & 0 & 0 & 0 & 0 \\
+Total & 17 & 1 & 16 & 16 & 2 & 14 \\
+\bottomrule
+\end{tabular}
+\caption{Failure typing separates Class A visible behavior errors from Class B metadata, taxonomy, coverage, or observation mismatches.}
+\label{tab:failure-typing}
+\end{table}
+
+\end{document}
