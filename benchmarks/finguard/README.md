@@ -29,6 +29,8 @@ The current layered local comparison sets are:
 - `local_comparison_v2.jsonl`: combined 60-case set used for the next local smoke comparison.
 - `local_comparison_v3_increment.jsonl`: 30 new stratified cases for the next sample-expansion axis.
 - `local_comparison_v3.jsonl`: combined 90-case set used to test whether the v2 local-smoke conclusion holds at a larger sample size.
+- `local_naive_rag_smoke_dataset.jsonl`: 8-case first-pass set for introducing `naive_rag` under the local smoke profile only.
+- `naive_rag_corpus.jsonl`: static local snippets used by the `naive_rag` smoke baseline. This is intentionally not a full retrieval system.
 
 The v2 and v3 increments are stratified instead of random. They expand:
 
@@ -54,6 +56,8 @@ FinGuard has two benchmark execution profiles with different purposes:
 - `default`: full Hermes agent path. It keeps the normal Hermes system prompt, tools, and continuation behavior. Use this for real agent benchmark runs after the local smoke profile is green.
 
 Do not compare scores from these two profiles as if they measure the same capability. The local smoke profile is a harness stability baseline; the default profile is the realistic agent benchmark.
+
+`naive_rag` is only supported on `benchmark_local_smoke_profile`. It adds a small static retrieval context to the local single-pass prompt, disables tools and continuation, and does not replace the full Hermes agent benchmark.
 
 ## Runner
 
@@ -94,7 +98,20 @@ python -m finguard.benchmark_smoke `
   --max-tokens 192
 ```
 
-`benchmark_local_smoke_profile` is intentionally narrow. It uses the same row and summary schema, but for `vanilla` and `finguard` local runs it uses a short benchmark prompt, disables tools, sends `think=false`, and performs one local chat-completions call with no continuation loop. This profile is the default local smoke baseline. It is for stable local smoke validation, not for measuring full Hermes agent capability.
+`benchmark_local_smoke_profile` is intentionally narrow. It uses the same row and summary schema, but for `vanilla`, `finguard`, and `naive_rag` local runs it uses a short benchmark prompt, disables tools, sends `think=false`, and performs one local chat-completions call with no continuation loop. This profile is the default local smoke baseline. It is for stable local smoke validation, not for measuring full Hermes agent capability.
+
+After the observation-aligned v3 result is frozen, introduce `naive_rag` as a separate local-smoke-only axis on the small first-pass set:
+
+```powershell
+python -m finguard.benchmark_smoke `
+  --dataset-path benchmarks/finguard/local_naive_rag_smoke_dataset.jsonl `
+  --output-dir data/finguard_benchmark_smoke/local_naive_rag_smoke/naive_rag `
+  --baseline-tag b2cd6b3c-observation-aligned `
+  --dataset-name finguard_local_naive_rag_smoke `
+  --baseline-mode naive_rag `
+  --run-profile benchmark_local_smoke_profile `
+  --max-tokens 192
+```
 
 After local smoke is green, run the full Hermes path explicitly by omitting `--run-profile benchmark_local_smoke_profile`:
 
@@ -113,17 +130,25 @@ Supported baseline modes:
 - `direct`: bare model call with no Hermes loop and no FinGuard wrappers
 - `vanilla`: Hermes loop with FinGuard guard/verify disabled
 - `finguard`: Hermes loop with the frozen FinGuard baseline enabled
+- `naive_rag`: local-smoke-only static retrieval baseline with no tools, no continuation, and no FinGuard wrappers
 
 Default system labels and routing:
 
 - `direct` -> `direct_remote`
 - `vanilla` -> `hermes_vanilla_gemma`
 - `finguard` -> `finguard_gemma`
+- `naive_rag` -> `naive_rag_gemma`
 
-For live smoke runs, `vanilla` and `finguard` now default to local routing:
+Additional local Qwen system labels:
 
-- Gemma: `http://localhost:18080/v1`
-- Qwen 3.5 / Qwen 3.6 / MiniMax profiles: `http://localhost:18081/v1`
+- `vanilla_qwen` -> `vanilla` baseline on `http://localhost:18080/v1`
+- `finguard_qwen` -> `finguard` baseline on `http://localhost:18080/v1`
+
+For live smoke runs, `vanilla`, `finguard`, and `naive_rag` now default to local routing:
+
+- Gemma default labels: `http://localhost:18080/v1`
+- Current Qwen labels (`vanilla_qwen`, `finguard_qwen`): `http://localhost:18080/v1`
+- Legacy Qwen 3.5 / Qwen 3.6 / MiniMax profiles: `http://localhost:18081/v1`
 
 If the selected local endpoint serves exactly one model, the runner auto-resolves that model id. You can override the routing explicitly with:
 
@@ -145,14 +170,24 @@ Outputs:
 - `local_comparison_v2_to_v3_error_migration.md`: error-structure analysis explaining why the v2 advantage weakens under the v3 stress-test expansion
 - `local_comparison_v3_mismatch_typing.md`: A/B typing of the 17 v3 FinGuard mismatches into real behavior errors vs safe-answer metadata/observation mismatches
 - `local_comparison_v3_observation_alignment_note.md`: observation-layer pass separating visible behavior safety from structured metadata alignment
+- `local_comparison_v3_fixed_result_table.md`: fixed four-metric result table for the observation-aligned `vanilla` vs `finguard` node
+- `local_naive_rag_smoke_note.md`: first 8-case local-smoke `naive_rag` axis validation and spot-check findings
+- `local_naive_rag_comparison_v3_result_table.md`: 90-case local-smoke three-way comparison for `vanilla`, `finguard`, and `naive_rag`
+- `local_naive_rag_comparison_v3_failure_analysis.md`: A/B failure typing for the 90-case `naive_rag` local-smoke comparison
+- `local_finguard_vs_naive_rag_comparative_discussion.md`: cross-baseline failure table and comparative findings for why FinGuard remains stronger after observation alignment
+- `finguard_local_smoke_writeup_draft.md`: publication-oriented writing skeleton with abstract, contributions, method, results, discussion, limitations, and overview result table
+- `local_qwen_comparison_v3_result_table.md`: Qwen3.5-27B local-smoke migration check for `vanilla_qwen` vs `finguard_qwen`
 
 The local comparison summary fixes these interpretation metrics before larger benchmark expansion:
 
 - `refusal_accuracy`: whether observed refusal matches the expected refusal label.
+- `raw_visible_refusal_accuracy`: visible refusal accuracy before observer-only wording alignment.
+- `aligned_visible_refusal_accuracy`: visible refusal accuracy after benchmark-only wording alignment. The compatibility field `visible_refusal_accuracy` follows this aligned observer.
 - `over_refusal_rate`: share of non-refusal-expected cases that still refused.
 - `verification_downgraded_rate`: share of cases where FinVerify conservatively downgraded due to insufficient support.
 - `category_breakdown`: expected-label decomposition for `factual`, `compliance_sensitive`, `injection`, and the cross-cutting `temporal` slice.
-- `behavior_safe_rate`: share of cases where the visible answer matches the expected refusal/non-refusal behavior.
+- `raw_behavior_safe_rate`: visible answer safety before observer-only wording alignment.
+- `behavior_safe_rate`: share of cases where the aligned visible answer observation matches the expected refusal/non-refusal behavior.
 - `metadata_aligned_rate`: share of cases where structured FinGuard metadata matches the expected benchmark path.
 - `behavior_safe_metadata_mismatch_count`: cases that are visibly safe but structurally recorded on the wrong metadata path.
 

@@ -81,9 +81,6 @@ Only one v3 FinGuard case remains `behavior_safe=false`:
 
 ## Decision Implication
 
-Do not enter naive RAG yet. The next decision is now clearer:
+This observation-aligned node is now frozen at `b2cd6b3c`. The behavior layer remains frozen; the next step is result packaging plus a separate small-batch `naive_rag` local-smoke axis.
 
-- If prioritizing product behavior, address the single weak visible refusal case first.
-- If prioritizing benchmark validity, align observation/metadata handling for the 16 safe-answer metadata mismatches first.
-
-Do not mix these with a new baseline axis.
+Do not use the new `naive_rag` axis to reinterpret this table. Treat this v3 result as the fixed `vanilla` vs `finguard` observation-aligned comparison, then evaluate retrieval as a separate experiment under the same local smoke profile.

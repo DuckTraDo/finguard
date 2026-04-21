@@ -1,17 +1,38 @@
-# FinGuard Local Smoke Benchmark Writeup Draft
+# FinGuard: A Lightweight Guard/Verify Wrapper for Safer Financial Assistants
 
-Status: publication-oriented writing skeleton. This document consolidates existing benchmark assets only; it does not add experiments, change behavior, or change benchmark code.
+**Authors:** [Author Name(s)]
 
-Baseline node: `b2cd6b3c-observation-aligned`
-Primary dataset: `local_comparison_v3.jsonl`
-Primary profile: `benchmark_local_smoke_profile`
-Primary comparison: `vanilla` vs `finguard` vs `naive_rag`
+**Affiliations:** [Institution / Lab / Independent Research]
+
+**Correspondence:** [email@example.com]
+
+**Draft status:** arXiv/LaTeX preparation skeleton. This document consolidates existing benchmark assets only; it does not add experiments, change behavior, or change benchmark code.
+
+**Benchmark node:** `b2cd6b3c-observation-aligned`
+
+**Primary dataset:** `local_comparison_v3.jsonl`
+
+**Primary profile:** `benchmark_local_smoke_profile`
+
+**Primary comparison:** `vanilla` vs `finguard` vs `naive_rag`
 
 ## Abstract
 
-Financial assistants need to answer educational questions while refusing personalized advice, account operations, and prompt-injection attempts. We present FinGuard, a lightweight guard/verify wrapper for a Hermes-style financial assistant, and evaluate it under a controlled local smoke profile designed to isolate safety routing, refusal behavior, and benchmark observability from full agent tool use. On a 90-case stratified local benchmark evaluated on Gemma 31B, FinGuard achieves the strongest aligned visible behavior safety (`0.989`) compared with vanilla local generation (`0.933`) and a static naive RAG baseline (`0.856`), while also reducing measured over-refusal to zero. We then repeat the vanilla-vs-FinGuard comparison on a Qwen3.5-27B local endpoint and observe the same pattern: FinGuard improves aligned behavior safety from `0.922` to `1.000` and reduces over-refusal from `0.154` to `0.000`. These results suggest the gains come from the wrapper architecture rather than single-model prompt tuning, while leaving full Hermes-agent, retrieval-heavy, and broader production evaluations for future work.
+Financial assistants need to answer educational questions while refusing personalized advice, account operations, and prompt-injection attempts. We present FinGuard, a lightweight guard/verify wrapper for a Hermes-style financial assistant \citep{yao2023react}, and evaluate it under a controlled local smoke profile designed to isolate safety routing, refusal behavior, and benchmark observability from full agent tool use. On a 90-case stratified local benchmark evaluated on Gemma 31B \citep{gemmateam2024gemma}, FinGuard achieves the strongest aligned visible behavior safety (`0.989`) compared with vanilla local generation (`0.933`) and a static naive RAG baseline (`0.856`) \citep{lewis2020rag}, while also reducing measured over-refusal to zero. We then repeat the vanilla-vs-FinGuard comparison on a Qwen3.5-27B local endpoint \citep{qwen2026qwen35} and observe the same pattern: FinGuard improves aligned behavior safety from `0.922` to `1.000` and reduces over-refusal from `0.154` to `0.000`. These results suggest the gains come from the wrapper architecture rather than single-model prompt tuning, while leaving full Hermes-agent, retrieval-heavy, and broader production evaluations for future work.
 
-## Contributions
+## Introduction
+
+Financial assistant safety is not only a refusal problem. A useful assistant must answer ordinary educational questions, handle temporal and numeric claims carefully, refuse personalized investment recommendations, decline account operations, and resist prompt-injection attempts. Systems that simply refuse broadly can look safe while being unhelpful; systems that answer broadly can look helpful while violating compliance-sensitive boundaries.
+
+FinGuard addresses this tension by adding a minimal wrapper around an existing Hermes-style assistant \citep{yao2023react} instead of replacing the assistant with a new RAG stack or a fine-tuned model. The wrapper has two responsibilities: classify and route user queries before generation, then verify or downgrade unsupported claims after generation. The benchmark work in this package focuses on whether that wrapper improves local safety behavior and observability under controlled conditions.
+
+The central question is:
+
+> Under a reproducible local smoke profile, does FinGuard improve financial safety behavior and diagnostic observability compared with vanilla generation and static naive RAG?
+
+The current answer is yes, with clear scope boundaries. FinGuard improves visible behavior safety, eliminates measured over-refusal in the 90-case run, and provides structured metadata for diagnosis. The same vanilla-vs-FinGuard pattern also appears on a Qwen3.5-27B local endpoint, suggesting the gain is not tied to a single local model. However, this result is not a claim about full Hermes agent performance, external retrieval quality, EDGAR grounding, or broad production generalization.
+
+### Contributions
 
 - We introduce a two-layer FinGuard wrapper that separates pre-generation guard routing from post-generation verification and conservative downgrade behavior.
 - We define a local smoke benchmark profile that disables tools, continuation, and remote routing to produce reproducible local comparisons.
@@ -20,33 +41,21 @@ Financial assistants need to answer educational questions while refusing persona
 - We demonstrate that FinGuard's local-smoke advantage transfers from Gemma 31B to Qwen3.5-27B without model-specific tuning, supporting the interpretation that the benefit comes from the wrapper architecture rather than single-model prompt engineering.
 - We provide A/B failure typing that separates true visible behavior errors from safe-answer metadata, taxonomy, or observation mismatches.
 
-## Introduction
-
-Financial assistant safety is not only a refusal problem. A useful assistant must answer ordinary educational questions, handle temporal and numeric claims carefully, refuse personalized investment recommendations, decline account operations, and resist prompt-injection attempts. Systems that simply refuse broadly can look safe while being unhelpful; systems that answer broadly can look helpful while violating compliance-sensitive boundaries.
-
-FinGuard addresses this tension by adding a minimal wrapper around an existing Hermes-style assistant instead of replacing the assistant with a new RAG stack or a fine-tuned model. The wrapper has two responsibilities: classify and route user queries before generation, then verify or downgrade unsupported claims after generation. The benchmark work in this package focuses on whether that wrapper improves local safety behavior and observability under controlled conditions.
-
-The central question is:
-
-> Under a reproducible local smoke profile, does FinGuard improve financial safety behavior and diagnostic observability compared with vanilla generation and static naive RAG?
-
-The current answer is yes, with clear scope boundaries. FinGuard improves visible behavior safety, eliminates measured over-refusal in the 90-case run, and provides structured metadata for diagnosis. The same vanilla-vs-FinGuard pattern also appears on a Qwen3.5-27B local endpoint, suggesting the gain is not tied to a single local model. However, this result is not a claim about full Hermes agent performance, external retrieval quality, EDGAR grounding, or broad production generalization.
-
 ## Related Work
 
-Financial-domain benchmarks have increasingly exposed the gap between general language-model fluency and reliable financial reasoning. FinanceBench (Islam et al., 2023) evaluates open-book financial question answering over public-company materials, emphasizing evidence-grounded answers to realistic analyst-style questions. CFinBench broadens this line in the Chinese financial setting, covering financial subjects, qualifications, practice, and law. These benchmarks are important for measuring domain knowledge and factual QA, but they primarily ask whether a model can produce the right answer. FinGuard instead asks whether a financial assistant routes, refuses, answers with disclaimers, or downgrades claims appropriately when questions cross compliance, temporal, operational, or prompt-injection boundaries.
+Financial-domain benchmarks have increasingly exposed the gap between general language-model fluency and reliable financial reasoning. FinanceBench \citep{islam2023financebench} evaluates open-book financial question answering over public-company materials, emphasizing evidence-grounded answers to realistic analyst-style questions. CFinBench broadens this line in the Chinese financial setting, covering financial subjects, qualifications, practice, and law \citep{nie2024cfinbench}. These benchmarks are important for measuring domain knowledge and factual QA, but they primarily ask whether a model can produce the right answer. FinGuard instead asks whether a financial assistant routes, refuses, answers with disclaimers, or downgrades claims appropriately when questions cross compliance, temporal, operational, or prompt-injection boundaries.
 
-Selective refusal and safety benchmarks study a complementary failure mode. RefusalBench examines when grounded language models should decline to answer because the supplied context is flawed or insufficient, showing that refusal behavior is not simply a matter of model scale or generic helpfulness. TRIDENT and Trident-Bench-style evaluations emphasize broader safety coverage, including harmful or professionally unsafe requests in high-stakes domains such as finance, law, and medicine. FinGuard builds on this concern with refusal correctness, but it separates three observable layers: structured metadata refusal, raw visible refusal, and observer-aligned visible refusal. This separation matters in finance because an answer can be behaviorally safe while still being misclassified by metadata or by a brittle observer.
+Selective refusal and safety benchmarks study a complementary failure mode. RefusalBench examines when grounded language models should decline to answer because the supplied context is flawed or insufficient, showing that refusal behavior is not simply a matter of model scale or generic helpfulness \citep{muhamed2025refusalbench}. TRIDENT and Trident-Bench-style evaluations emphasize broader safety coverage, including harmful or professionally unsafe requests in high-stakes domains such as finance, law, and medicine \citep{hui2025trident}. FinGuard builds on this concern with refusal correctness, but it separates three observable layers: structured metadata refusal, raw visible refusal, and observer-aligned visible refusal. This separation matters in finance because an answer can be behaviorally safe while still being misclassified by metadata or by a brittle observer.
 
-LLM guardrail systems provide the closest architectural precedent. NeMo Guardrails represents guardrails as programmable rails that can sit around an LLM application, while Llama Guard frames safety as input and output classification over a risk taxonomy. Constitutional AI similarly shows how explicit normative principles can shape model behavior, though primarily through training and preference-style alignment rather than a lightweight runtime wrapper. These systems show the value of external or explicit policy enforcement, but FinGuard is narrower: it is not a general safety classifier, a fine-tuning recipe, or a replacement RAG system. It specializes wrapper logic for financial document QA, refusal correctness, temporal awareness, source normalization, and numeric traceability.
+LLM guardrail systems provide the closest architectural precedent. NeMo Guardrails represents guardrails as programmable rails that can sit around an LLM application \citep{rebedea2023nemo}, while Llama Guard frames safety as input and output classification over a risk taxonomy \citep{inan2023llamaguard}. Constitutional AI similarly shows how explicit normative principles can shape model behavior, though primarily through training and preference-style alignment rather than a lightweight runtime wrapper \citep{bai2022constitutional}. These systems show the value of external or explicit policy enforcement, but FinGuard is narrower: it is not a general safety classifier, a fine-tuning recipe, or a replacement RAG system. It specializes wrapper logic for financial document QA, refusal correctness, temporal awareness, source normalization, and numeric traceability.
 
-Finally, agent safety wrappers extend guardrails from single-turn moderation to runtime orchestration. Agentic systems must decide not only what text to generate, but also whether to call tools, trust retrieved context, expose hidden instructions, or execute user-requested account actions. Lightweight guardrail work is especially relevant here because production agents often need auditable policy checks without retraining the base model or replacing the surrounding application. FinGuard's local smoke profile deliberately disables full tool use to isolate the wrapper's behavior, but the design is motivated by this broader agent-safety setting: make the safety layer observable, fail-soft, and model-agnostic before evaluating richer full-agent behavior.
+Finally, agent safety wrappers extend guardrails from single-turn moderation to runtime orchestration \citep{debenedetti2024agentdojo,ruan2024toolemu}. Agentic systems must decide not only what text to generate, but also whether to call tools, trust retrieved context, expose hidden instructions, or execute user-requested account actions \citep{yao2023react,debenedetti2024agentdojo}. Lightweight guardrail work is especially relevant here because production agents often need auditable policy checks without retraining the base model or replacing the surrounding application. FinGuard's local smoke profile deliberately disables full tool use to isolate the wrapper's behavior, but the design is motivated by this broader agent-safety setting: make the safety layer observable, fail-soft, and model-agnostic before evaluating richer full-agent behavior.
 
 ## Method
 
 ### Benchmark Profile
 
-All primary results use `benchmark_local_smoke_profile`. This profile is intentionally narrow: it routes to a local Gemma model through `http://localhost:18080/v1`, uses a short benchmark-only prompt, disables tools, disables continuation, sends `think=false`, and caps generation with `--max-tokens 192`.
+All primary results use `benchmark_local_smoke_profile`. This profile is intentionally narrow: it routes to a local Gemma model through `http://localhost:18080/v1` \citep{gemmateam2024gemma}, uses a short benchmark-only prompt, disables tools, disables continuation, sends `think=false`, and caps generation with `--max-tokens 192`.
 
 This profile is designed to measure benchmark plumbing, refusal behavior, over-refusal, visible safety, and wrapper metadata under reproducible local conditions. It should not be interpreted as the full Hermes agent path.
 
@@ -76,11 +85,11 @@ We compare three local-smoke baselines:
 - `finguard`: local model generation with the FinGuard guard and verify layers enabled.
 - `naive_rag`: local model generation with static retrieval snippets added to the prompt, but without FinGuard wrappers or full agent tools.
 
-The naive RAG baseline is intentionally minimal. It tests whether static context injection alone improves local smoke behavior; it is not a production retrieval system and does not replace full Hermes-agent benchmarking.
+The naive RAG baseline is intentionally minimal \citep{lewis2020rag}. It tests whether static context injection alone improves local smoke behavior; it is not a production retrieval system and does not replace full Hermes-agent benchmarking.
 
 ### Cross-Model Setup
 
-The primary three-way comparison uses the local Gemma endpoint. To test whether FinGuard's advantage transfers across model families, we also run the same 90-case `local_comparison_v3.jsonl` benchmark on a Qwen3.5-27B local endpoint exposed at `http://localhost:18080/v1`.
+The primary three-way comparison uses the local Gemma endpoint \citep{gemmateam2024gemma}. To test whether FinGuard's advantage transfers across model families, we also run the same 90-case `local_comparison_v3.jsonl` benchmark on a Qwen3.5-27B local endpoint exposed at `http://localhost:18080/v1` \citep{qwen2026qwen35}.
 
 The same local endpoint address (`http://localhost:18080/v1`) was reused across experimental phases; the underlying model was swapped between Gemma 31B and Qwen3.5-27B between runs, with only one model served at any given time.
 
@@ -184,7 +193,9 @@ This result is intentionally scoped. It should not be presented as a complete ev
 - Metadata-aligned metrics are asymmetric: FinGuard emits structured guard/verify metadata, while vanilla and naive RAG do not.
 - The benchmark emphasizes refusal, over-refusal, injection, operational, temporal, and traceability behavior; it does not yet measure full factual accuracy against external authoritative sources.
 
-## Current Claim Boundary
+## Claim Boundary / Conclusion
+
+This draft supports a narrow but useful claim: FinGuard improves financial refusal behavior and benchmark observability under a controlled local smoke profile, and the vanilla-vs-FinGuard advantage transfers from Gemma 31B to Qwen3.5-27B without model-specific tuning. The result should be framed as a wrapper-architecture finding, not as a final claim about full-agent financial QA.
 
 A safe publication claim is:
 
@@ -196,3 +207,32 @@ Claims that should wait for future work:
 - FinGuard solves factual grounding or live financial data retrieval.
 - Naive RAG is generally unsafe.
 - The result generalizes across all models, providers, or production traffic.
+
+## Bibliography Key Map
+
+- `islam2023financebench`: FinanceBench, open-book financial question answering over public-company materials.
+- `nie2024cfinbench`: CFinBench, Chinese financial benchmark covering knowledge, qualifications, practice, and law.
+- `muhamed2025refusalbench`: RefusalBench, selective refusal evaluation for grounded language models.
+- `hui2025trident`: TRIDENT / Trident-Bench, high-stakes domain safety benchmark covering finance, medicine, and law.
+- `rebedea2023nemo`: NeMo Guardrails, programmable guardrails for LLM applications.
+- `inan2023llamaguard`: Llama Guard, input-output safety classification using a risk taxonomy.
+- `bai2022constitutional`: Constitutional AI, principle-based model alignment and preference training.
+- `yao2023react`: ReAct, agentic reasoning/action framing for Hermes-style assistants.
+- `debenedetti2024agentdojo`: AgentDojo, agent prompt-injection and defense benchmark.
+- `ruan2024toolemu`: ToolEmu, agent tool-use risk evaluation.
+- `lewis2020rag`: Retrieval-augmented generation background for the static naive RAG baseline.
+- `gemmateam2024gemma`: Gemma model reference for the Gemma 31B local endpoint.
+- `qwen2026qwen35`: Qwen3.5-27B model card reference for the Qwen local endpoint.
+
+## LaTeX Conversion Checklist
+
+- Keep the `Overview Result Table` in the main paper because it is the primary Gemma 31B three-way comparison.
+- Keep the `Cross-Model Generalization` table in the main paper because it supports the central wrapper-architecture claim.
+- Keep the compact `Category Breakdown` table in the main paper if space allows; otherwise move it to an appendix and summarize the injection/temporal findings in prose.
+- Move the full `Failure Typing` table to an appendix for workshop-length submissions; keep only one sentence in the main Results or Discussion.
+- Move detailed naive RAG failure analysis and mismatch typing notes to an appendix; cite them from the Discussion as supporting diagnostics.
+- Compress the Introduction by merging the research question and current answer into one paragraph for workshop format.
+- Compress Related Work to three paragraphs for arXiv if needed: financial QA, refusal/safety benchmarks, and guardrails/agent wrappers.
+- Compress Discussion by keeping the observation-alignment argument, the cross-model interpretation, and one sentence on injection.
+- Keep Limitations as a short bullet list in arXiv; convert to prose only if the venue discourages bullets.
+- Replace every citation key with finalized BibTeX entries before final arXiv upload.
