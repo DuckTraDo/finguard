@@ -50,7 +50,7 @@ For full results including the naive RAG baseline and category breakdown, see ou
 ## Quick Start
 
 ```bash
-git clone https://github.com/[your-username]/finguard.git
+git clone https://github.com/DuckTraDo/finguard.git
 cd finguard
 uv venv venv --python 3.11
 source venv/bin/activate  # Windows: venv\Scripts\activate
